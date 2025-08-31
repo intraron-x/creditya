@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
+import com.intraron.api.dto.LoanRequestDTO;
+import com.intraron.model.loan.Loan;
+import com.intraron.usecase.loan.LoanUseCase;
 
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
 
@@ -26,6 +29,40 @@ import static org.springframework.web.reactive.function.server.ServerResponse.ok
 public class Handler {
 
     private final UserUseCase userUseCase;
+    private final LoanUseCase loanUseCase;
+
+    /**
+     * @author intraron
+     * Maneja la petición para registrar una nueva solicitud de préstamo.
+     * Mapea el DTO de entrada al modelo de dominio y llama al caso de uso.
+     * @param serverRequest La petición del servidor.
+     * @return Mono<ServerResponse> Una respuesta HTTP reactiva.
+     */
+    public Mono<ServerResponse> registerLoanRequest(ServerRequest serverRequest) {
+        log.info("Petición de registro de solicitud de préstamo recibida.");
+        return serverRequest.bodyToMono(LoanRequestDTO.class)
+                .flatMap(loanRequestDTO -> {
+                    log.info("Mapeando LoanRequestDTO a Loan.");
+                    // intraron: AQUI se realiza el mapeo.
+                    Loan loan = Loan.builder()
+                            .userEmail(loanRequestDTO.getUserEmail())
+                            .loanAmount(loanRequestDTO.getLoanAmount())
+                            .loanTerm(loanRequestDTO.getLoanTerm())
+                            .build();
+
+                    // intraron: Se pasa el objeto de dominio al caso de uso.
+                    return loanUseCase.save(loan)
+                            .flatMap(savedLoan -> ok().contentType(MediaType.APPLICATION_JSON).bodyValue(savedLoan))
+                            .onErrorResume(IllegalArgumentException.class, e -> {
+                                log.warn("Validación fallida en la solicitud: {}", e.getMessage());
+                                return ServerResponse.badRequest().bodyValue(e.getMessage());
+                            })
+                            .onErrorResume(e -> {
+                                log.error("Error al registrar solicitud: {}", e.getMessage());
+                                return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue("Error interno al procesar la solicitud.");
+                            });
+                });
+    }
 
     public Mono<ServerResponse> registerUser(ServerRequest serverRequest) {
         log.debug("Petición de registro de usuario recibida.");
