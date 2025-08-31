@@ -14,12 +14,37 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.util.UUID;
+
 @Slf4j
 @Repository
 @RequiredArgsConstructor
 public class LoanRepositoryAdapter implements LoanRepository {
 
     private final LoanReactiveRepository loanReactiveRepository;
+
+    /**
+     * @author intraron
+     * Implementa la búsqueda de una solicitud por su ID.
+     * @param id El ID de la solicitud a buscar.
+     * @return Mono<Loan> que emite la solicitud de dominio encontrada.
+     */
+    @Override
+    public Mono<Loan> findById(UUID id) {
+        log.info("Buscando solicitud con ID: {}", id);
+        return loanReactiveRepository.findById(id)
+                .map(entity -> {
+                    log.info("Solicitud encontrada con ID: {}", entity.getId());
+                    // intraron: Se mapea la entidad de persistencia a un objeto de dominio
+                    return Loan.builder()
+                            .id(entity.getId())
+                            .userEmail(entity.getUserEmail())
+                            .loanAmount(entity.getLoanAmount())
+                            .loanTerm(entity.getLoanTerm())
+                            .build();
+                })
+                .doOnError(e -> log.error("Error al buscar la solicitud con ID {}: {}", id, e.getMessage(), e));
+    }
 
     @Override
     public Mono<Loan> save(Loan loan) {

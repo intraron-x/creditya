@@ -20,8 +20,11 @@ import reactor.core.publisher.Mono;
 import com.intraron.api.dto.LoanRequestDTO;
 import com.intraron.model.loan.Loan;
 import com.intraron.usecase.loan.LoanUseCase;
+import java.util.UUID;
 
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
+import com.intraron.api.dto.LoanEvaluationResponseDTO;
+import com.intraron.model.loan.LoanEvaluationResult;
 
 @Slf4j
 @Component
@@ -30,6 +33,43 @@ public class Handler {
 
     private final UserUseCase userUseCase;
     private final LoanUseCase loanUseCase;
+
+    /**
+     * @author intraron
+     * Maneja la petición para evaluar una solicitud de préstamo por su ID.
+     * Mapea el resultado del dominio a un DTO de respuesta.
+     * @param serverRequest La petición del servidor, que contiene el ID en la ruta.
+     * @return Mono<ServerResponse> Una respuesta HTTP reactiva con el resultado de la evaluación.
+     */
+    public Mono<ServerResponse> evaluateLoan(ServerRequest serverRequest) {
+        log.info("Petición de evaluación de solicitud de préstamo recibida.");
+        String loanId = serverRequest.pathVariable("id");
+
+        return Mono.just(loanId)
+                .map(UUID::fromString)
+                .flatMap(loanUseCase::evaluateLoan)
+                .flatMap(evaluationResult -> { // intraron: Aquí se recibe el objeto de dominio
+                    log.info("Evaluación completada. Mapeando resultado a DTO.");
+                    // intraron: Se mapea el objeto de dominio a un DTO de respuesta
+                    LoanEvaluationResponseDTO responseDTO = LoanEvaluationResponseDTO.builder()
+                            .evaluationResult(evaluationResult.getEvaluation())
+                            .loanAmount(evaluationResult.getLoanAmount())
+                            .loanTerm(evaluationResult.getLoanTerm())
+                            .build();
+                    return ServerResponse.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(responseDTO);
+                })
+                .onErrorResume(IllegalArgumentException.class, e -> {
+                    log.warn("Validación fallida en la solicitud: {}", e.getMessage());
+                    return ServerResponse.badRequest().bodyValue(e.getMessage());
+                })
+                .onErrorResume(e -> {
+                    log.error("Error inesperado al evaluar la solicitud: {}", e.getMessage());
+                    return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .bodyValue("Error interno al procesar la solicitud.");
+                });
+    }
 
     /**
      * @author intraron
