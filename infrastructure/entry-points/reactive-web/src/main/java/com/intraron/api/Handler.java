@@ -6,12 +6,9 @@
 
 package com.intraron.api;
 
-import com.intraron.api.dto.UserRequestDTO;
-import com.intraron.model.user.User;
 import com.intraron.usecase.user.UserUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -24,7 +21,6 @@ import java.util.UUID;
 
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
 import com.intraron.api.dto.LoanEvaluationResponseDTO;
-import com.intraron.model.loan.LoanEvaluationResult;
 
 @Slf4j
 @Component
@@ -59,8 +55,8 @@ public class Handler {
                     return ServerResponse.ok()
                             .contentType(MediaType.APPLICATION_JSON)
                             .bodyValue(responseDTO);
-                })
-                .onErrorResume(IllegalArgumentException.class, e -> {
+                });
+                /*.onErrorResume(IllegalArgumentException.class, e -> {
                     log.warn("Validación fallida en la solicitud: {}", e.getMessage());
                     return ServerResponse.badRequest().bodyValue(e.getMessage());
                 })
@@ -68,7 +64,7 @@ public class Handler {
                     log.error("Error inesperado al evaluar la solicitud: {}", e.getMessage());
                     return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
                             .bodyValue("Error interno al procesar la solicitud.");
-                });
+                });*/
     }
 
     /**
@@ -92,46 +88,19 @@ public class Handler {
 
                     // intraron: Se pasa el objeto de dominio al caso de uso.
                     return loanUseCase.save(loan)
-                            .flatMap(savedLoan -> ok().contentType(MediaType.APPLICATION_JSON).bodyValue(savedLoan))
-                            .onErrorResume(IllegalArgumentException.class, e -> {
+                            .flatMap(savedLoan -> ok().contentType(MediaType.APPLICATION_JSON).bodyValue(savedLoan));
+                            /*.onErrorResume(IllegalArgumentException.class, e -> {
                                 log.warn("Validación fallida en la solicitud: {}", e.getMessage());
                                 return ServerResponse.badRequest().bodyValue(e.getMessage());
                             })
                             .onErrorResume(e -> {
                                 log.error("Error al registrar solicitud: {}", e.getMessage());
                                 return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue("Error interno al procesar la solicitud.");
-                            });
+                            });*/
                 });
     }
 
-    public Mono<ServerResponse> registerUser(ServerRequest serverRequest) {
-        log.debug("Petición de registro de usuario recibida.");
 
-        return serverRequest.bodyToMono(UserRequestDTO.class)
-                .flatMap(userRequestDTO -> {
-                    log.debug("Mapeando UserRequestDTO a User: {}", userRequestDTO.getCorreoElectronico());
-                    // Mapea el DTO de entrada al modelo de dominio.
-                    User user = User.builder()
-                            .nombres(userRequestDTO.getNombres())
-                            .apellidos(userRequestDTO.getApellidos())
-                            .fechaNacimiento(userRequestDTO.getFechaNacimiento())
-                            .direccion(userRequestDTO.getDireccion())
-                            .telefono(userRequestDTO.getTelefono())
-                            .correoElectronico(userRequestDTO.getCorreoElectronico())
-                            .salarioBase(userRequestDTO.getSalarioBase())
-                            .build();
-
-                    // Llama al caso de uso para procesar la petición.
-                    return userUseCase.save(user)
-                            .flatMap(savedUser ->
-                                    ok().contentType(MediaType.APPLICATION_JSON).bodyValue(savedUser)
-                            )
-                            .onErrorResume(e -> {
-                                log.error("Error al registrar usuario: {}", e.getMessage());
-                                return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue(e.getMessage());
-                            });
-                });
-    }
 
     public Mono<ServerResponse> getAllUsers(ServerRequest serverRequest) {
         log.debug("Petición para obtener todos los usuarios recibida.");
@@ -140,9 +109,9 @@ public class Handler {
                 .flatMap(users -> {
                     log.debug("Usuarios encontrados: {}", users.size());
                     return ok().contentType(MediaType.APPLICATION_JSON).bodyValue(users);
-                })
-                .doOnError(e -> log.error("Error al obtener todos los usuarios: {}", e.getMessage()))
-                .onErrorResume(e -> ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue(e.getMessage()));
+                });
+                /*.doOnError(e -> log.error("Error al obtener todos los usuarios: {}", e.getMessage()))
+                .onErrorResume(e -> ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue(e.getMessage()));*/
     }
 
     public Mono<ServerResponse> listenGETUseCase(ServerRequest serverRequest) {

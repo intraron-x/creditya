@@ -4,6 +4,10 @@
  * Transforma los objetos de dominio a entidades de persistencia y viceversa.
  */
 
+// intraron: Esta clase es el adaptador que implementa el gateway.
+// Aquí se realiza la traducción entre el modelo de dominio (User)
+// y la entidad de persistencia (UserEntity).
+
 package com.intraron.r2dbc;
 
 import com.intraron.model.user.User;
@@ -15,7 +19,10 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.UUID;
+import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 
 @Slf4j
 @Repository
@@ -38,6 +45,8 @@ public class UserRepositoryAdapter implements UserRepository {
                 .telefono(user.getTelefono())
                 .correoElectronico(user.getCorreoElectronico())
                 .salarioBase(user.getSalarioBase())
+                .password(user.getPassword())
+                .roles(Collections.singletonList(String.join(",", user.getRoles())))
                 .build();
 
         // Llama al repositorio para guardar la entidad.
@@ -77,6 +86,8 @@ public class UserRepositoryAdapter implements UserRepository {
                         .telefono(entity.getTelefono())
                         .correoElectronico(entity.getCorreoElectronico())
                         .salarioBase(entity.getSalarioBase())
+                        .password(entity.getPassword())
+                        .roles(Collections.singleton(String.join(",", entity.getRoles())))
                         .build())
                 .doOnError(e -> {
                     // Log a nivel ERROR si ocurre un fallo.
@@ -90,16 +101,7 @@ public class UserRepositoryAdapter implements UserRepository {
         // Llama al repositorio para buscar todos los usuarios.
         return userReactiveRepository.findAll()
                 // Mapea cada entidad encontrada a un objeto de dominio.
-                .map(entity -> User.builder()
-                        .id(entity.getId())
-                        .nombres(entity.getNombres())
-                        .apellidos(entity.getApellidos())
-                        .fechaNacimiento(entity.getFechaNacimiento())
-                        .direccion(entity.getDireccion())
-                        .telefono(entity.getTelefono())
-                        .correoElectronico(entity.getCorreoElectronico())
-                        .salarioBase(entity.getSalarioBase())
-                        .build())
+                .map(UserEntity::toUser)
                 .doOnError(e -> {
                     // Log a nivel ERROR si ocurre un fallo.
                     log.error("Error al obtener todos los usuarios: {}", e.getMessage(), e);

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -23,10 +24,12 @@ public class User {
     private String id;
     private String nombres;
     private String apellidos;
-    private LocalDate fechaNacimiento; // Se usa String para simplificar la validación en esta etapa.
+    private LocalDate fechaNacimiento;
     private String direccion;
     private String telefono;
     private String correoElectronico;
     private Double salarioBase;
+    private String password;
+    private Set<String> roles;
 }
 

@@ -14,6 +14,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import java.util.regex.Pattern;
 
+import java.util.Set; // intraron: Importar para el rol por defecto
+
 @Slf4j
 @RequiredArgsConstructor
 public class UserUseCase {
@@ -29,13 +31,14 @@ public class UserUseCase {
         if (user.getNombres() == null || user.getNombres().trim().isEmpty() ||
                 user.getApellidos() == null || user.getApellidos().trim().isEmpty() ||
                 user.getCorreoElectronico() == null || user.getCorreoElectronico().trim().isEmpty() ||
-                user.getSalarioBase() == null) {
-            log.warn("Validación fallida: campos requeridos nulos o vacíos.");
-            return Mono.error(new IllegalArgumentException("Los campos nombres, apellidos, correo_electronico y salario_base no pueden ser nulos o vacíos."));
+                user.getPassword() == null || user.getPassword().isEmpty() ||
+                user.getSalarioBase() == 0.0) {
+            log.warn("Validación fallida: campos requeridos faltantes.");
+            return Mono.error(new IllegalArgumentException("Todos los campos son obligatorios."));
         }
 
         if (!EMAIL_PATTERN.matcher(user.getCorreoElectronico()).matches()) {
-            log.warn("Validación fallida: formato de correo electrónico inválido.");
+            log.warn("Validación fallida: formato de correo inválido.");
             return Mono.error(new IllegalArgumentException("El formato del correo electrónico es inválido."));
         }
 
@@ -60,5 +63,9 @@ public class UserUseCase {
         log.info("Iniciando consulta de todos los usuarios.");
         return userRepository.getAllUsers()
                 .doOnComplete(() -> log.info("Consulta de todos los usuarios finalizada."));
+    }
+
+    public Mono<User> findByCorreoElectronico(String correoElectronico) {
+        return userRepository.findByCorreoElectronico(correoElectronico);
     }
 }
