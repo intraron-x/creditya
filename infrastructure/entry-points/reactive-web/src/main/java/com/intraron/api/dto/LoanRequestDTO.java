@@ -17,6 +17,7 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoanRequestDTO implements Serializable {
+    private String userName;
     private String userEmail; // Correo electrónico para identificar al usuario
     private Double loanAmount; // Monto del préstamo solicitado
     private Integer loanTerm;  // Plazo del préstamo en meses

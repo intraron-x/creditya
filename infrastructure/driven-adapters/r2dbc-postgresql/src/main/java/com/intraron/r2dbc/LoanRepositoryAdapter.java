@@ -6,14 +6,21 @@
  */
 package com.intraron.r2dbc;
 
+import com.intraron.model.common.DomainPageable;
 import com.intraron.model.loan.Loan;
 import com.intraron.model.loan.gateways.LoanRepository;
 import com.intraron.r2dbc.entity.LoanEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -22,6 +29,7 @@ import java.util.UUID;
 public class LoanRepositoryAdapter implements LoanRepository {
 
     private final LoanReactiveRepository loanReactiveRepository;
+    private final DatabaseClient databaseClient;
 
     /**
      * @author intraron
@@ -41,6 +49,11 @@ public class LoanRepositoryAdapter implements LoanRepository {
                             .userEmail(entity.getUserEmail())
                             .loanAmount(entity.getLoanAmount())
                             .loanTerm(entity.getLoanTerm())
+                            .loanType(entity.getLoanType())
+                            .interestRate(entity.getInterestRate())
+                            .requestStatus(entity.getRequestStatus())
+                            .baseSalary(entity.getBaseSalary())
+                            .totalMonthlyDebt(entity.getTotalMonthlyDebt())
                             .build();
                 })
                 .doOnError(e -> log.error("Error al buscar la solicitud con ID {}: {}", id, e.getMessage(), e));
@@ -54,6 +67,11 @@ public class LoanRepositoryAdapter implements LoanRepository {
                 .userEmail(loan.getUserEmail())
                 .loanAmount(loan.getLoanAmount())
                 .loanTerm(loan.getLoanTerm())
+                .loanType(loan.getLoanType())
+                .interestRate(loan.getInterestRate())
+                .requestStatus(loan.getRequestStatus())
+                .baseSalary(loan.getBaseSalary())
+                .totalMonthlyDebt(loan.getTotalMonthlyDebt())
                 .build();
 
         return loanReactiveRepository.save(loanEntity)
@@ -64,8 +82,70 @@ public class LoanRepositoryAdapter implements LoanRepository {
                             .userEmail(entity.getUserEmail())
                             .loanAmount(entity.getLoanAmount())
                             .loanTerm(entity.getLoanTerm())
+                            .loanType(entity.getLoanType())
+                            .interestRate(entity.getInterestRate())
+                            .requestStatus(entity.getRequestStatus())
+                            .baseSalary(entity.getBaseSalary())
+                            .totalMonthlyDebt(entity.getTotalMonthlyDebt())
+
                             .build();
                 })
                 .doOnError(e -> log.error("Error al guardar la solicitud: {}", e.getMessage(), e));
+    }
+
+    /**
+     * @author intraron
+     * Implementa el método para obtener un flujo de solicitudes filtradas por estados.
+     * @param statuses Lista de estados por los que se desea filtrar.
+     * @return Flux<Loan> que emite un flujo de solicitudes de dominio.
+     */
+    @Override
+    public Flux<Loan> findAllByStatus(List<String> statuses) {
+        log.info("Buscando solicitudes con los estados: {} y paginación: {}", statuses);
+
+        return loanReactiveRepository.findByRequestStatusIn(statuses)
+                .map(entity -> {
+                    // intraron: Mapea la entidad de la base de datos al objeto de dominio
+                    return Loan.builder()
+                            .id(entity.getId())
+                            .userEmail(entity.getUserEmail())
+                            .loanAmount(entity.getLoanAmount())
+                            .loanTerm(entity.getLoanTerm())
+                            .loanType(entity.getLoanType())
+                            .interestRate(entity.getInterestRate())
+                            .requestStatus(entity.getRequestStatus())
+                            .baseSalary(entity.getBaseSalary())
+                            .totalMonthlyDebt(entity.getTotalMonthlyDebt())
+                            .build();
+                })
+                .doOnError(e -> log.error("Error al buscar solicitudes por estado y paginación: {}", e.getMessage(), e));
+    }
+
+    @Override
+    public Flux<Loan> findAllByStatusPaginated(List<String> statuses, DomainPageable pageable) {
+        log.info("Buscando solicitudes con los estados: {} con paginación", statuses);
+
+        String sql = "SELECT * FROM solicitudes WHERE request_status IN (:statuses) ORDER BY " + pageable.getSortBy() + " ASC LIMIT :limit OFFSET :offset";
+
+        int offset = pageable.getPage() * pageable.getSize();
+
+        return databaseClient.sql(sql)
+                .bind("statuses", statuses)
+                .bind("limit", pageable.getSize())
+                .bind("offset", offset)
+                .map(row -> LoanEntity.builder()
+                        .id(row.get("id", UUID.class))
+                        .userEmail(row.get("user_email", String.class))
+                        .loanAmount(row.get("loan_amount", Double.class))
+                        .loanTerm(row.get("loan_term", Integer.class))
+                        .loanType(row.get("loan_type", String.class))
+                        .interestRate(row.get("interest_rate", Double.class))
+                        .requestStatus(row.get("request_status", String.class))
+                        .baseSalary(row.get("base_salary", Double.class))
+                        .totalMonthlyDebt(row.get("total_monthly_debt", Double.class))
+                        .build()
+                )
+                .all()
+                .map(LoanEntity::toLoan); // Asumiendo que LoanEntity::toLoan hace el mapeo a tu objeto de dominio
     }
 }

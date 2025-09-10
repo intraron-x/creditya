@@ -17,5 +17,9 @@ public class Loan {
     private String userEmail;
     private Double loanAmount;
     private Integer loanTerm;
-    // Otros atributos de dominio, como estado (por ejemplo, PENDIENTE, APROBADO, RECHAZADO)
+    private String loanType;
+    private Double interestRate;
+    private String requestStatus;
+    private Double baseSalary;
+    private Double totalMonthlyDebt;
 }

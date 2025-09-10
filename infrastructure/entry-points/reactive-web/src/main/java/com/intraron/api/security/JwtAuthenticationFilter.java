@@ -3,6 +3,7 @@
 package com.intraron.api.security;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -14,6 +15,7 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter implements WebFilter {
@@ -39,6 +41,7 @@ public class JwtAuthenticationFilter implements WebFilter {
             return userDetailsService.findByUsername(userEmail)
                     .flatMap(userDetails -> {
                         if (jwtService.isTokenValid(jwt, userDetails)) {
+                            log.info("Roles extraídos del token para el usuario {}: {}", userDetails.getUsername(), userDetails.getAuthorities());
                             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                                     userDetails,
                                     null,

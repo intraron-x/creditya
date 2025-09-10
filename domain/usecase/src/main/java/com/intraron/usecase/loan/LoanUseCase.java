@@ -6,13 +6,18 @@
  */
 package com.intraron.usecase.loan;
 
+import com.intraron.model.common.DomainPageable;
 import com.intraron.model.loan.Loan;
 import com.intraron.model.loan.LoanEvaluationResult;
 import com.intraron.model.loan.gateways.LoanRepository;
 import com.intraron.model.user.gateways.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 
@@ -40,7 +45,22 @@ public class LoanUseCase {
 
                             if (user.getSalarioBase() >= 8000000) {
                                 evaluation = "APROBADO";
-                            } else if (user.getSalarioBase() >= 4000000) {
+                            } else if (loan.getLoanAmount() <= user.getSalarioBase() * 0.4){
+                                return Mono.just(LoanEvaluationResult.builder()
+                                        .evaluation("APROBADO")
+                                        .loanAmount(loan.getLoanAmount())
+                                        .loanTerm(loan.getLoanTerm())
+                                        .build());
+                            }
+                            else if (user.getSalarioBase() < loan.getLoanAmount() / 12) {
+                                log.warn("Evaluación de solicitud {}: Rechazada por salario insuficiente.", loanId);
+                                return Mono.just(LoanEvaluationResult.builder()
+                                        .evaluation("RECHAZADO")
+                                        .loanAmount(loan.getLoanAmount())
+                                        .loanTerm(loan.getLoanTerm())
+                                        .build());
+                            }
+                            else if (user.getSalarioBase() >= 4000000) {
                                 evaluation = "ANALISIS";
                             } else {
                                 evaluation = "NEGADO";
@@ -62,10 +82,16 @@ public class LoanUseCase {
      * @param loan El objeto de dominio 'Loan' con los datos de la solicitud.
      * @return Mono<Loan> que emite la solicitud guardada.
      */
-    public Mono<Loan> save(Loan loan) {
+    public Mono<Loan> save(Loan loan, String loggedInUserEmail) {
         log.info("Iniciando proceso de registro para la solicitud del usuario: {}", loan.getUserEmail());
 
-        // intraron: Las validaciones ahora se hacen directamente sobre el objeto 'loan'.
+        // intraron: Se valida que el usuario de la solicitud coincida con el usuario logueado.
+        if (!loggedInUserEmail.equalsIgnoreCase(loan.getUserEmail())) {
+            log.warn("Validación de seguridad fallida: el usuario logueado no coincide con el de la solicitud.");
+            return Mono.error(new IllegalAccessException("El usuario logueado no tiene permisos para crear una solicitud para otro usuario."));
+        }
+
+        // intraron: Las validaciones de negocio se realizan sobre el objeto 'loan'.
         if (loan.getLoanAmount() <= 0 || loan.getLoanAmount() > 10000000) {
             return Mono.error(new IllegalArgumentException("El monto del préstamo debe ser mayor a 0 y no exceder los 10,000,000."));
         }
@@ -80,4 +106,19 @@ public class LoanUseCase {
                     return loanRepository.save(loan); // Se pasa el objeto de dominio directamente.
                 });
     }
+
+    /**
+     * @author intraron
+     * Obtiene un listado de solicitudes de préstamo para revisión manual.
+     * Esta es la lógica de negocio para el requerimiento #4.
+     * @return Flux<Loan> que emite las solicitudes de préstamo que requieren revisión.
+     */
+    public Flux<Loan> getManualReviewLoansPaginated(DomainPageable pageable) {
+        log.info("Iniciando la búsqueda paginada de solicitudes para revisión manual. Página: {}, Tamaño: {}, Ordenar por: {}",
+                pageable.getPage(), pageable.getSize(), pageable.getSortBy());
+        List<String> statuses = Arrays.asList("PENDIENTE_REVISION", "RECHAZADAS", "REVISION_MANUAL");
+        return loanRepository.findAllByStatusPaginated(statuses, pageable)
+                .doOnComplete(() -> log.info("Consulta paginada de solicitudes para revisión manual finalizada."));
+    }
+
 }

@@ -6,10 +6,15 @@
 
 package com.intraron.api;
 
+import com.intraron.api.dto.LoanResponseDTO;
+import com.intraron.model.common.DomainPageable;
+import com.intraron.r2dbc.entity.UserEntity;
 import com.intraron.usecase.user.UserUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
@@ -17,7 +22,10 @@ import reactor.core.publisher.Mono;
 import com.intraron.api.dto.LoanRequestDTO;
 import com.intraron.model.loan.Loan;
 import com.intraron.usecase.loan.LoanUseCase;
+
+import java.util.Collections;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
 import com.intraron.api.dto.LoanEvaluationResponseDTO;
@@ -29,6 +37,37 @@ public class Handler {
 
     private final UserUseCase userUseCase;
     private final LoanUseCase loanUseCase;
+
+    /**
+     * @author intraron
+     * Maneja la petición para obtener una lista de solicitudes de préstamo para revisión manual con paginación.
+     * @param serverRequest La petición del servidor, que contiene los query parameters de paginación.
+     * @return Mono<ServerResponse> con la lista paginada de solicitudes.
+     */
+    public Mono<ServerResponse> getManualReviewLoansPaginated(ServerRequest serverRequest) {
+        log.debug("Petición para obtener solicitudes de revisión manual recibida.");
+
+        // intraron: Si el rol es correcto, se procede con la lógica.
+        int page = serverRequest.queryParam("page").map(Integer::parseInt).orElse(0);
+        int size = serverRequest.queryParam("size").map(Integer::parseInt).orElse(10);
+        String sortBy = serverRequest.queryParam("sortby").orElse("id");
+
+        DomainPageable pageable = new DomainPageable(page, size, sortBy);
+
+        return loanUseCase.getManualReviewLoansPaginated(pageable)
+                .collectList()
+                .flatMap(loans -> {
+                    log.info("Se encontraron {} solicitudes para revisión manual.", loans.size());
+                    if (loans.isEmpty()) {
+                        return ok().contentType(MediaType.APPLICATION_JSON).bodyValue(Collections.emptyList());
+                    }
+                    return ok().contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(loans.stream()
+                                    .map(LoanResponseDTO::fromDomain)
+                                    .collect(Collectors.toList()));
+                })
+                .doOnError(e -> log.error("Error al obtener solicitudes para revisión manual: {}", e.getMessage()));
+    }
 
     /**
      * @author intraron
@@ -76,18 +115,31 @@ public class Handler {
      */
     public Mono<ServerResponse> registerLoanRequest(ServerRequest serverRequest) {
         log.info("Petición de registro de solicitud de préstamo recibida.");
-        return serverRequest.bodyToMono(LoanRequestDTO.class)
-                .flatMap(loanRequestDTO -> {
+
+        // Se obtiene el email del usuario logueado del contexto de seguridad.
+        Mono<String> loggedInUserEmailMono = ReactiveSecurityContextHolder.getContext()
+                .map(securityContext -> (UserEntity) securityContext.getAuthentication().getPrincipal())
+                .map(UserEntity::getCorreoElectronico);
+
+        return Mono.zip(serverRequest.bodyToMono(LoanRequestDTO.class), loggedInUserEmailMono)
+                .flatMap(tuple -> {
+
+                    LoanRequestDTO requestDTO = tuple.getT1();
+                    String loggedInUserEmail = tuple.getT2();
+
                     log.info("Mapeando LoanRequestDTO a Loan.");
                     // intraron: AQUI se realiza el mapeo.
                     Loan loan = Loan.builder()
-                            .userEmail(loanRequestDTO.getUserEmail())
-                            .loanAmount(loanRequestDTO.getLoanAmount())
-                            .loanTerm(loanRequestDTO.getLoanTerm())
+                            .userEmail(requestDTO.getUserEmail())
+                            .loanAmount(requestDTO.getLoanAmount())
+                            .loanTerm(requestDTO.getLoanTerm())
+                            .requestStatus("PENDIENTE_REVISION")
                             .build();
 
+                    log.info("Correo electronico optenido de SS {}.", loggedInUserEmail);
+
                     // intraron: Se pasa el objeto de dominio al caso de uso.
-                    return loanUseCase.save(loan)
+                    return loanUseCase.save(loan,loggedInUserEmail)
                             .flatMap(savedLoan -> ok().contentType(MediaType.APPLICATION_JSON).bodyValue(savedLoan));
                             /*.onErrorResume(IllegalArgumentException.class, e -> {
                                 log.warn("Validación fallida en la solicitud: {}", e.getMessage());
